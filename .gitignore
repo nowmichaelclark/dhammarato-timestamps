@@ -8,6 +8,10 @@ __pycache__/
 .temp_json/
 *.info.json
 
+# Google credentials — never commit these
+credentials.json
+token.json
+
 # OS
 .DS_Store
 Thumbs.db

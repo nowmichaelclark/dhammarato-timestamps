@@ -26,6 +26,7 @@ from config import (
     SLEEP_MAX,
 )
 from make_xlsx import build_xlsx
+from sync_to_sheets import sync as sync_sheets
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -310,6 +311,9 @@ def main() -> None:
     print()
     print("  Rebuilding Excel file ...")
     build_xlsx()
+
+    # Push to Google Sheets if configured
+    sync_sheets()
 
     print()
     print("=" * 52)
