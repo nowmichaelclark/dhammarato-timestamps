@@ -17,7 +17,7 @@ SLEEP_MAX = 7
 # Leave GOOGLE_SHEET_ID as an empty string to skip Sheets sync entirely.
 # To enable: paste the ID from your sheet's URL between the quotes.
 # URL looks like: https://docs.google.com/spreadsheets/d/SHEET_ID_HERE/edit
-GOOGLE_SHEET_ID = ""
+GOOGLE_SHEET_ID = "1O7yhYRbcvt63ZmpFeraWVfqXwHFNkz_m9dhAT3Wh9oo"
 
 # Name of the tab inside the spreadsheet to write to
 GOOGLE_SHEET_TAB = "Timestamps"

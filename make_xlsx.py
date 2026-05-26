@@ -24,8 +24,8 @@ CSV_FILE = Path("data/timestamps.csv")
 OUT_FILE = Path("data/timestamps.xlsx")
 
 HEADERS = [
-    "Video ID", "Video Title", "Author",
-    "Comment", "Timestamp", "Timestamp Link", "Date Added",
+    "Timestamp Link", "Video Title", "Author",
+    "Comment", "Timestamp", "Video ID", "Date Added",
 ]
 LINK_COL = HEADERS.index("Timestamp Link") + 1  # 1-based column index
 

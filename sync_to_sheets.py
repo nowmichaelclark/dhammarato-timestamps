@@ -39,8 +39,8 @@ TOKEN          = Path("token.json")
 CSV_FILE       = Path("data/timestamps.csv")
 
 HEADERS = [
-    "Video ID", "Video Title", "Author",
-    "Comment", "Timestamp", "Timestamp Link", "Date Added",
+    "Timestamp Link", "Video Title", "Author",
+    "Comment", "Timestamp", "Video ID", "Date Added",
 ]
 
 # Column index (0-based) of the Timestamp Link — will become a clickable formula
