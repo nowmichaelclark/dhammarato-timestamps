@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Temp files created during scraping (auto-cleaned, but just in case)
+.temp_json/
+*.info.json
+
+# OS
+.DS_Store
+Thumbs.db
