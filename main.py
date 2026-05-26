@@ -25,6 +25,7 @@ from config import (
     SLEEP_MIN,
     SLEEP_MAX,
 )
+from make_xlsx import build_xlsx
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -305,10 +306,16 @@ def main() -> None:
     except OSError:
         pass
 
+    # Rebuild the Excel file with clickable links
+    print()
+    print("  Rebuilding Excel file ...")
+    build_xlsx()
+
     print()
     print("=" * 52)
     print(f"  Done!  {total_new_rows} new timestamp row(s) added.")
-    print(f"  CSV: {CSV_FILE}")
+    print(f"  CSV:   {CSV_FILE}")
+    print(f"  Excel: data/timestamps.xlsx  (open this for clickable links)")
     print()
     print("  Next steps:")
     print("    git add data/")
