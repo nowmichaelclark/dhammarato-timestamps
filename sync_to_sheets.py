@@ -13,7 +13,6 @@ Every run after that (also called automatically by main.py):
 
 import csv
 import sys
-import json
 import argparse
 from pathlib import Path
 
@@ -33,18 +32,19 @@ except ImportError:
 
 from config import GOOGLE_SHEET_ID, GOOGLE_SHEET_TAB
 
-SCOPES         = ["https://www.googleapis.com/auth/spreadsheets"]
-CREDENTIALS    = Path("credentials.json")
-TOKEN          = Path("token.json")
-CSV_FILE       = Path("data/timestamps.csv")
+SCOPES      = ["https://www.googleapis.com/auth/spreadsheets"]
+CREDENTIALS = Path("credentials.json")
+TOKEN       = Path("token.json")
+CSV_FILE    = Path("data/timestamps.csv")
 
+# Edit this list to reorder, add, or remove columns in the sheet.
 HEADERS = [
     "Timestamp Link", "Video Title", "Author",
     "Comment", "Timestamp", "Video ID", "Date Added",
 ]
 
-# Column index (0-based) of the Timestamp Link — will become a clickable formula
-LINK_COL = HEADERS.index("Timestamp Link")
+LINK_KEY = "Timestamp Link"
+TS_KEY   = "Timestamp"
 
 
 # ---------------------------------------------------------------------------
@@ -53,10 +53,8 @@ LINK_COL = HEADERS.index("Timestamp Link")
 
 def get_service():
     creds = None
-
     if TOKEN.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN), SCOPES)
-
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -68,9 +66,7 @@ def get_service():
                 )
             flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS), SCOPES)
             creds = flow.run_local_server(port=0)
-
         TOKEN.write_text(creds.to_json())
-
     return build("sheets", "v4", credentials=creds)
 
 
@@ -78,29 +74,23 @@ def get_service():
 # Sheet helpers
 # ---------------------------------------------------------------------------
 
-def ensure_tab_exists(service, sheet_id: str, tab_name: str) -> None:
-    """Creates the tab if it doesn't already exist."""
-    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+def ensure_tab_exists(service, sheet_id, tab_name):
+    meta     = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
     existing = [s["properties"]["title"] for s in meta.get("sheets", [])]
     if tab_name not in existing:
         body = {"requests": [{"addSheet": {"properties": {"title": tab_name}}}]}
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=sheet_id, body=body
-        ).execute()
+        service.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body=body).execute()
         print(f"  Created tab: {tab_name}")
 
 
-def format_sheet(service, sheet_id: str, tab_name: str, num_rows: int) -> None:
-    """Freezes the header row, bolds it, and auto-resizes columns."""
-    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+def format_sheet(service, sheet_id, tab_name):
+    meta   = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
     tab_id = next(
         s["properties"]["sheetId"]
         for s in meta["sheets"]
         if s["properties"]["title"] == tab_name
     )
-
     requests = [
-        # Freeze header row
         {
             "updateSheetProperties": {
                 "properties": {
@@ -110,24 +100,21 @@ def format_sheet(service, sheet_id: str, tab_name: str, num_rows: int) -> None:
                 "fields": "gridProperties.frozenRowCount",
             }
         },
-        # Bold header row
         {
             "repeatCell": {
-                "range": {
-                    "sheetId": tab_id,
-                    "startRowIndex": 0,
-                    "endRowIndex": 1,
-                },
+                "range": {"sheetId": tab_id, "startRowIndex": 0, "endRowIndex": 1},
                 "cell": {
                     "userEnteredFormat": {
-                        "textFormat": {"bold": True},
-                        "backgroundColor": {"red": 0.12, "green": 0.31, "blue": 0.47},
+                        "textFormat": {
+                            "bold": True,
+                            "foregroundColor": {"red": 0.1, "green": 0.25, "blue": 0.1},
+                        },
+                        "backgroundColor": {"red": 0.56, "green": 0.78, "blue": 0.49},
                     }
                 },
                 "fields": "userEnteredFormat(textFormat,backgroundColor)",
             }
         },
-        # Auto-resize all columns
         {
             "autoResizeDimensions": {
                 "dimensions": {
@@ -139,49 +126,44 @@ def format_sheet(service, sheet_id: str, tab_name: str, num_rows: int) -> None:
             }
         },
     ]
-
     service.spreadsheets().batchUpdate(
         spreadsheetId=sheet_id, body={"requests": requests}
     ).execute()
 
 
 # ---------------------------------------------------------------------------
-# Main sync logic
+# CSV reading — uses DictReader so column order in the file doesn't matter
 # ---------------------------------------------------------------------------
 
-def read_csv() -> list[list]:
-    """Returns all rows (including header) as a list of lists."""
+def read_csv_as_dicts() -> list[dict]:
     if not CSV_FILE.exists():
         sys.exit(f"[ERROR] {CSV_FILE} not found — run main.py first.")
-
-    rows = []
     with open(CSV_FILE, newline="", encoding="utf-8") as f:
-        for row in csv.reader(f):
-            rows.append(row)
-    return rows
+        return list(csv.DictReader(f))
 
 
-def build_values(rows: list[list]) -> list[list]:
+def build_values(records: list[dict]) -> list[list]:
     """
-    Converts the raw CSV rows into the values to write to Sheets.
-    The Timestamp Link column becomes a HYPERLINK formula so it's clickable.
+    Reorders columns to match HEADERS and converts the Timestamp Link
+    cell into a clickable HYPERLINK formula.
     """
-    out = []
-    for i, row in enumerate(rows):
-        if i == 0:
-            out.append(row)   # header as-is
-            continue
-
-        new_row = list(row)
-        if LINK_COL < len(row):
-            url = row[LINK_COL]
-            if url.startswith("http"):
-                ts = row[HEADERS.index("Timestamp")] if HEADERS.index("Timestamp") < len(row) else ""
+    out = [HEADERS]  # header row first
+    for record in records:
+        row = []
+        for key in HEADERS:
+            val = record.get(key, "")
+            if key == LINK_KEY and val.startswith("http"):
+                ts    = record.get(TS_KEY, "")
                 label = f"▶ {ts}" if ts else "▶ Watch"
-                new_row[LINK_COL] = f'=HYPERLINK("{url}","{label}")'
-        out.append(new_row)
+                val   = f'=HYPERLINK("{val}","{label}")'
+            row.append(val)
+        out.append(row)
     return out
 
+
+# ---------------------------------------------------------------------------
+# Main sync
+# ---------------------------------------------------------------------------
 
 def sync():
     if not GOOGLE_SHEET_ID:
@@ -196,27 +178,25 @@ def sync():
         print("  Skipping Sheets sync.")
         return
 
-    rows   = read_csv()
-    values = build_values(rows)
+    records = read_csv_as_dicts()
+    values  = build_values(records)
 
     try:
         ensure_tab_exists(service, GOOGLE_SHEET_ID, GOOGLE_SHEET_TAB)
 
-        # Clear the tab and rewrite everything (clean approach; avoids stale rows)
         range_ref = f"'{GOOGLE_SHEET_TAB}'!A1"
         service.spreadsheets().values().clear(
-            spreadsheetId=GOOGLE_SHEET_ID,
-            range=range_ref,
+            spreadsheetId=GOOGLE_SHEET_ID, range=range_ref,
         ).execute()
 
         service.spreadsheets().values().update(
             spreadsheetId=GOOGLE_SHEET_ID,
             range=range_ref,
-            valueInputOption="USER_ENTERED",   # lets HYPERLINK formulas evaluate
+            valueInputOption="USER_ENTERED",
             body={"values": values},
         ).execute()
 
-        format_sheet(service, GOOGLE_SHEET_ID, GOOGLE_SHEET_TAB, len(values))
+        format_sheet(service, GOOGLE_SHEET_ID, GOOGLE_SHEET_TAB)
 
         print(f"  Google Sheet updated: {len(values) - 1} rows written.")
         print(f"  https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/edit")
@@ -281,16 +261,11 @@ That's it! The sheet will now update every time you run main.py.
 ==============================================================
 """
 
-# ---------------------------------------------------------------------------
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--setup", action="store_true",
-        help="Print the first-time setup instructions"
-    )
+    parser.add_argument("--setup", action="store_true",
+                        help="Print the first-time setup instructions")
     args = parser.parse_args()
-
     if args.setup:
         print(SETUP_GUIDE)
     else:

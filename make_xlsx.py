@@ -23,13 +23,17 @@ except ImportError:
 CSV_FILE = Path("data/timestamps.csv")
 OUT_FILE = Path("data/timestamps.xlsx")
 
+# Edit this list to reorder, add, or remove columns in the spreadsheet.
 HEADERS = [
     "Timestamp Link", "Video Title", "Author",
     "Comment", "Timestamp", "Video ID", "Date Added",
 ]
-LINK_COL = HEADERS.index("Timestamp Link") + 1  # 1-based column index
 
-COLUMN_WIDTHS = [12, 42, 20, 60, 10, 12, 12]
+# Column widths (inches) matching HEADERS order above
+#  Timestamp Link | Video Title | Author | Comment | Timestamp | Video ID | Date Added
+COLUMN_WIDTHS = [14, 42, 20, 60, 10, 14, 12]
+
+LINK_KEY = "Timestamp Link"
 
 
 def build_xlsx():
@@ -41,22 +45,21 @@ def build_xlsx():
     ws.title = "Timestamps"
 
     # ── Header row ──────────────────────────────────────────────────────────
-    header_fill = PatternFill("solid", start_color="1F4E79")
-    header_font = Font(bold=True, color="FFFFFF", name="Arial", size=10)
+    header_fill = PatternFill("solid", start_color="8EC97D")   # light green
+    header_font = Font(bold=True, color="1A3F1A", name="Arial", size=10)
     for col, heading in enumerate(HEADERS, 1):
         cell = ws.cell(row=1, column=col, value=heading)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(
-            horizontal="center", vertical="center", wrap_text=True
-        )
+        cell.font      = header_font
+        cell.fill      = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.row_dimensions[1].height = 28
     ws.freeze_panes = "A2"
 
-    # ── Data rows ────────────────────────────────────────────────────────────
+    # ── Data rows ─────────────────────────────────────────────────────────
     row_font  = Font(name="Arial", size=10)
     link_font = Font(name="Arial", size=10, color="0563C1", underline="single")
     alt_fill  = PatternFill("solid", start_color="EAF0FB")
+    comment_col = HEADERS.index("Comment") + 1  # 1-based
 
     with open(CSV_FILE, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -66,7 +69,7 @@ def build_xlsx():
                 val  = record.get(key, "")
                 cell = ws.cell(row=excel_row, column=col, value=val)
 
-                if col == LINK_COL and val.startswith("http"):
+                if key == LINK_KEY and val.startswith("http"):
                     cell.hyperlink = val
                     cell.value     = "▶ Watch"
                     cell.font      = link_font
@@ -77,7 +80,7 @@ def build_xlsx():
 
                 cell.alignment = Alignment(
                     vertical="top",
-                    wrap_text=(col == HEADERS.index("Comment") + 1),
+                    wrap_text=(col == comment_col),
                 )
 
     # ── Column widths ─────────────────────────────────────────────────────
